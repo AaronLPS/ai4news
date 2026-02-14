@@ -46,15 +46,15 @@ Edit `config/targets.yaml` to add LinkedIn pages to monitor:
 
 ```yaml
 targets:
-- name: Hilti
+- name: Anthropic
   type: company
-  url: https://www.linkedin.com/company/hilti
+  url: https://www.linkedin.com/company/anthropicresearch
 - name: OpenAI
   type: company
   url: https://www.linkedin.com/company/openai
-- name: Jane Smith
+- name: name_test
   type: person
-  url: https://www.linkedin.com/in/janesmith
+  url: https://www.linkedin.com/in/name_test/
 ```
 
 Supported types: `company`, `person`, `hashtag`.

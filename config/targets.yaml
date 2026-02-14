@@ -1,7 +1,7 @@
 targets:
-- name: Hilti
+- name: Anthropic
   type: company
-  url: https://www.linkedin.com/company/hilti
+  url: https://www.linkedin.com/company/anthropicresearch
 - name: OpenAI
   type: company
   url: https://www.linkedin.com/company/openai
