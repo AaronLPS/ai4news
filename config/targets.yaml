@@ -1,1 +1,7 @@
-targets: []
+targets:
+- name: Hilti
+  type: company
+  url: https://www.linkedin.com/company/hilti
+- name: OpenAI
+  type: company
+  url: https://www.linkedin.com/company/openai
