@@ -41,10 +41,11 @@ For each target:
      const posts = document.querySelectorAll(
        '[data-urn*="urn:li:activity"], .feed-shared-update-v2, .occludable-update'
      );
-     return Array.from(posts).slice(0, 3).map(el => {
+     return Array.from(posts).map(el => {
        const urn = el.getAttribute('data-urn') || '';
        const idMatch = urn.match(/urn:li:activity:\d+/);
        const authorEl = el.querySelector(
+         '.update-components-actor__title span[aria-hidden="true"], ' +
          '.update-components-actor__name span[aria-hidden="true"], ' +
          '.feed-shared-actor__name span[aria-hidden="true"]'
        );
@@ -54,19 +55,26 @@ For each target:
        );
        const linkEl = el.querySelector('a[href*="feed/update"]');
        const timeEl = el.querySelector('time');
+       const subDesc = el.querySelector('.update-components-actor__sub-description');
        const imgs = el.querySelectorAll(
          '.feed-shared-image__image, .update-components-image img'
        );
        const linkedinId = idMatch ? idMatch[0] : null;
+       let postedAt = '';
+       if (timeEl) {
+         postedAt = timeEl.getAttribute('datetime') || timeEl.innerText.trim();
+       } else if (subDesc) {
+         postedAt = subDesc.innerText.trim().split('•')[0].trim();
+       }
        return {
          linkedin_id: linkedinId,
          author: authorEl ? authorEl.innerText.trim() : 'Unknown',
          text: textEl ? textEl.innerText.trim().slice(0, 500) : '',
          url: linkEl ? linkEl.href : (linkedinId ? 'https://www.linkedin.com/feed/update/' + linkedinId : ''),
          media_urls: Array.from(imgs).map(i => i.src).filter(Boolean),
-         posted_at: timeEl ? (timeEl.getAttribute('datetime') || timeEl.innerText.trim()) : '',
+         posted_at: postedAt,
        };
-     }).filter(p => p.linkedin_id);
+     }).filter(p => p.linkedin_id).slice(0, 3);
    }
    ```
 6. **Fallback:** If the JS extraction returns an empty array (e.g. LinkedIn changed selectors), fall back to `take_snapshot` of the **current visible area only** (no additional scrolling) and extract posts from the snapshot text. Use snapshot-extracted data as best-effort -- IDs may not be stable.
