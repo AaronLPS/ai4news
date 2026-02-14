@@ -6,7 +6,6 @@ from mcp.server.fastmcp import FastMCP
 
 from ai4news.config import get_data_dir, load_targets, save_targets
 from ai4news.storage import Database
-from ai4news.scraper import scrape_all_targets, open_login_browser
 from ai4news.newsletter import generate_html
 
 mcp = FastMCP(
@@ -19,16 +18,65 @@ def _get_db() -> Database:
     return Database(get_data_dir() / "ai4news.db")
 
 
+def _build_activity_url(base_url: str, target_type: str) -> str:
+    """Build the LinkedIn activity/posts URL for a target."""
+    url = base_url.rstrip("/")
+    if target_type == "person":
+        return f"{url}/recent-activity/all/"
+    elif target_type == "company":
+        return f"{url}/posts/"
+    else:
+        return url
+
+
 @mcp.tool()
-async def scrape_targets() -> dict:
-    """Scrape latest LinkedIn posts from all configured targets.
-    Uses persistent Browser Profile for login session.
-    Returns scraped count, new count, and any errors.
+def store_posts(target_url: str, posts: list[dict]) -> dict:
+    """Store posts extracted by the AI from a LinkedIn target page.
+
+    target_url: the base LinkedIn URL of the target (must match a configured target).
+    posts: list of post dicts, each with keys:
+        - linkedin_id (required): unique post ID, e.g. "urn:li:activity:123"
+        - author: post author name
+        - text: post body text
+        - url: direct link to the post
+        - media_urls: list of image/video URLs
+        - posted_at: ISO timestamp or relative string
+    Returns dict with stored count, new count, and any errors.
     """
     db = _get_db()
     try:
-        result = await scrape_all_targets(db)
-        return result
+        normalized_url = target_url.rstrip("/")
+        targets = db.list_targets()
+        target = None
+        for t in targets:
+            if t["url"].rstrip("/") == normalized_url:
+                target = t
+                break
+        if target is None:
+            return {"error": f"Unknown target URL: {target_url}. Use list_targets to see configured targets."}
+
+        target_id = target["id"]
+        stored = 0
+        new = 0
+        errors = []
+        for post in posts:
+            linkedin_id = post.get("linkedin_id")
+            if not linkedin_id:
+                errors.append("Skipped post with missing linkedin_id")
+                continue
+            inserted = db.insert_post(
+                target_id=target_id,
+                linkedin_id=linkedin_id,
+                author=post.get("author", "Unknown"),
+                text=post.get("text", ""),
+                url=post.get("url", ""),
+                media_urls=post.get("media_urls", []),
+                posted_at=post.get("posted_at", ""),
+            )
+            stored += 1
+            if inserted:
+                new += 1
+        return {"stored": stored, "new": new, "duplicates": stored - new, "errors": errors}
     finally:
         db.close()
 
@@ -114,20 +162,18 @@ def remove_target(url: str) -> dict:
 
 @mcp.tool()
 def list_targets() -> list[dict]:
-    """List all configured LinkedIn targets."""
+    """List all configured LinkedIn targets with their activity URLs.
+    Each target includes: id, url, type, name, created_at, activity_url.
+    Use activity_url with Chrome DevTools navigate_page to visit the target's posts.
+    """
     db = _get_db()
     try:
-        return db.list_targets()
+        targets = db.list_targets()
+        for t in targets:
+            t["activity_url"] = _build_activity_url(t["url"], t["type"])
+        return targets
     finally:
         db.close()
-
-
-@mcp.tool()
-async def login() -> str:
-    """Open a browser window for manual LinkedIn login.
-    Session is saved to persistent Browser Profile for future scraping.
-    """
-    return await open_login_browser()
 
 
 def main():
