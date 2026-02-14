@@ -84,6 +84,8 @@ Claude will:
 
 The newsletter opens automatically in your browser. Files are saved to `data/newsletters/`.
 
+![Example newsletter output](assets/newsletter-example.png)
+
 ## Architecture
 
 ```
