@@ -2,7 +2,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from jinja2 import Template
+from jinja2 import Environment
 
 NEWSLETTER_TEMPLATE = """\
 <!DOCTYPE html>
@@ -99,7 +99,8 @@ def generate_html(posts: list[dict], output_dir: Path) -> Path:
     Returns the Path to the generated HTML file.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
-    today = datetime.now().strftime("%Y-%m-%d")
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
 
     processed: list[dict] = []
     for post in posts:
@@ -114,7 +115,8 @@ def generate_html(posts: list[dict], output_dir: Path) -> Path:
         processed.append(p)
 
     groups = group_posts_by_target(processed)
-    template = Template(NEWSLETTER_TEMPLATE)
+    env = Environment(autoescape=True)
+    template = env.from_string(NEWSLETTER_TEMPLATE)
     html = template.render(
         date=today,
         total=len(posts),
@@ -122,6 +124,7 @@ def generate_html(posts: list[dict], output_dir: Path) -> Path:
         groups=groups,
     )
 
-    path = output_dir / f"{today}.html"
+    timestamp = now.strftime("%Y-%m-%d_%H%M%S")
+    path = output_dir / f"{timestamp}.html"
     path.write_text(html, encoding="utf-8")
     return path

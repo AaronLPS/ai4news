@@ -10,6 +10,7 @@ class Database:
         self.db_path = db_path
         self.conn = sqlite3.connect(str(db_path))
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA foreign_keys = ON")
         self._create_tables()
 
     def _create_tables(self):
@@ -24,7 +25,7 @@ class Database:
 
             CREATE TABLE IF NOT EXISTS posts (
                 id INTEGER PRIMARY KEY,
-                target_id INTEGER REFERENCES targets(id),
+                target_id INTEGER REFERENCES targets(id) ON DELETE CASCADE,
                 linkedin_id TEXT UNIQUE,
                 author TEXT,
                 text TEXT,
@@ -61,9 +62,14 @@ class Database:
         return cur.lastrowid
 
     def remove_target(self, url: str) -> bool:
-        cur = self.conn.execute("DELETE FROM targets WHERE url = ?", (url,))
+        cur = self.conn.execute("SELECT id FROM targets WHERE url = ?", (url,))
+        row = cur.fetchone()
+        if not row:
+            return False
+        self.conn.execute("DELETE FROM posts WHERE target_id = ?", (row["id"],))
+        self.conn.execute("DELETE FROM targets WHERE id = ?", (row["id"],))
         self.conn.commit()
-        return cur.rowcount > 0
+        return True
 
     def list_targets(self) -> list[dict]:
         cur = self.conn.execute("SELECT id, url, type, name, created_at FROM targets")

@@ -1,7 +1,4 @@
 # src/ai4news/server.py
-import asyncio
-import subprocess
-import sys
 import webbrowser
 from pathlib import Path
 
@@ -84,12 +81,18 @@ def add_target(url: str, target_type: str, name: str = "") -> dict:
         return {"error": f"Invalid type: {target_type}. Must be person, company, or hashtag."}
     db = _get_db()
     try:
-        tid = db.upsert_target(url=url, target_type=target_type, name=name)
         targets = load_targets()
-        if not any(t["url"] == url for t in targets):
+        needs_yaml_update = not any(t["url"] == url for t in targets)
+        if needs_yaml_update:
             targets.append({"type": target_type, "name": name, "url": url})
             save_targets(targets)
+        tid = db.upsert_target(url=url, target_type=target_type, name=name)
         return {"id": tid, "url": url, "type": target_type, "name": name}
+    except Exception:
+        if needs_yaml_update:
+            targets = [t for t in targets if t["url"] != url]
+            save_targets(targets)
+        raise
     finally:
         db.close()
 
@@ -99,11 +102,11 @@ def remove_target(url: str) -> dict:
     """Remove a LinkedIn target from monitoring."""
     db = _get_db()
     try:
+        targets_before = load_targets()
         removed = db.remove_target(url)
         if removed:
-            targets = load_targets()
-            targets = [t for t in targets if t["url"] != url]
-            save_targets(targets)
+            updated = [t for t in targets_before if t["url"] != url]
+            save_targets(updated)
         return {"removed": removed, "url": url}
     finally:
         db.close()

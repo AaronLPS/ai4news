@@ -1,12 +1,10 @@
 # src/ai4news/scraper.py
 import asyncio
-import json
 import logging
 import random
 import re
-from pathlib import Path
 
-from playwright.async_api import async_playwright, Page, BrowserContext
+from playwright.async_api import async_playwright, Page
 
 from ai4news.config import get_data_dir, load_targets
 from ai4news.storage import Database
@@ -195,7 +193,7 @@ async def open_login_browser() -> str:
         await page.goto("https://www.linkedin.com/login")
         print("Please log in to LinkedIn in the browser window.")
         print("Press Enter here when done...")
-        await asyncio.get_event_loop().run_in_executor(None, input)
+        await asyncio.get_running_loop().run_in_executor(None, input)
         await context.close()
 
     return "Login session saved to browser profile."
