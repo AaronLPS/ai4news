@@ -26,31 +26,53 @@ For each target:
 
 1. **Navigate:** Use `navigate_page` (Chrome DevTools MCP) to open the target's `activity_url`
 2. **Wait for content:** Use `wait_for` to wait for post content to appear (e.g. text "activity" or a known page element)
-3. **Scroll for more posts:** Use `evaluate_script` to scroll down and load more posts:
+3. **Login wall check:** Use `take_snapshot` and check for login wall indicators (text like "Sign in", "Join now", or no post content). If detected, stop and inform the user:
+   > "LinkedIn requires login. Please log into LinkedIn in your Chrome browser, then try again."
+4. **Scroll once:** Use `evaluate_script` to scroll down once and load a few more posts:
    ```javascript
    async () => {
-     for (let i = 0; i < 5; i++) {
-       window.scrollBy(0, 1000);
-       await new Promise(r => setTimeout(r, 2000));
-     }
+     window.scrollBy(0, 1500);
+     await new Promise(r => setTimeout(r, 2000));
    }
    ```
-4. **Take snapshot:** Use `take_snapshot` to get a text representation of the page
-5. **Extract posts:** From the snapshot text, extract each post with these fields:
-   - `linkedin_id`: look for URN patterns like `urn:li:activity:DIGITS` in links or data attributes. If no URN found, generate a deterministic ID from the post content (e.g. hash of author+first 100 chars of text)
-   - `author`: the name of the person/company who posted
-   - `text`: the full post body text
-   - `url`: direct link to the post (often contains the URN)
-   - `media_urls`: list of any image or video URLs
-   - `posted_at`: timestamp or relative time string (e.g. "2d ago", "1w")
-6. **Store posts:** Call `store_posts(target_url=<target's base url>, posts=<extracted posts list>)`
+5. **Extract posts via JS:** Use `evaluate_script` to extract the top 3 posts directly from the DOM. This avoids large snapshots and returns compact JSON with stable IDs:
+   ```javascript
+   () => {
+     const posts = document.querySelectorAll(
+       '[data-urn*="urn:li:activity"], .feed-shared-update-v2, .occludable-update'
+     );
+     return Array.from(posts).slice(0, 3).map(el => {
+       const urn = el.getAttribute('data-urn') || '';
+       const idMatch = urn.match(/urn:li:activity:\d+/);
+       const authorEl = el.querySelector(
+         '.update-components-actor__name span[aria-hidden="true"], ' +
+         '.feed-shared-actor__name span[aria-hidden="true"]'
+       );
+       const textEl = el.querySelector(
+         '.feed-shared-update-v2__description, ' +
+         '.update-components-text, .feed-shared-text'
+       );
+       const linkEl = el.querySelector('a[href*="feed/update"]');
+       const timeEl = el.querySelector('time');
+       const imgs = el.querySelectorAll(
+         '.feed-shared-image__image, .update-components-image img'
+       );
+       const linkedinId = idMatch ? idMatch[0] : null;
+       return {
+         linkedin_id: linkedinId,
+         author: authorEl ? authorEl.innerText.trim() : 'Unknown',
+         text: textEl ? textEl.innerText.trim().slice(0, 500) : '',
+         url: linkEl ? linkEl.href : (linkedinId ? 'https://www.linkedin.com/feed/update/' + linkedinId : ''),
+         media_urls: Array.from(imgs).map(i => i.src).filter(Boolean),
+         posted_at: timeEl ? (timeEl.getAttribute('datetime') || timeEl.innerText.trim()) : '',
+       };
+     }).filter(p => p.linkedin_id);
+   }
+   ```
+6. **Fallback:** If the JS extraction returns an empty array (e.g. LinkedIn changed selectors), fall back to `take_snapshot` of the **current visible area only** (no additional scrolling) and extract posts from the snapshot text. Use snapshot-extracted data as best-effort -- IDs may not be stable.
+7. **Store posts:** Call `store_posts(target_url=<target's base url>, posts=<extracted posts list>)`
 
-### Step 3: Detect login walls
-
-If a snapshot shows a login page (text like "Sign in", "Join now", or no post content), stop and inform the user:
-> "LinkedIn requires login. Please log into LinkedIn in your Chrome browser, then try again."
-
-### Step 4: Generate newsletter
+### Step 3: Generate newsletter
 
 1. Call `get_new_posts(since_days=7)` to retrieve all posts from the past week
 2. For each post, generate a one-sentence English summary
